@@ -1,0 +1,3 @@
+# Upstream Servers are reached over Streamable HTTP only
+
+The Gateway connects only to Upstream Servers that already run as network services (Streamable HTTP, registered by URL); it never launches stdio MCP servers as local processes. Many Workspaces share one deployment, so launching a Workspace-supplied command would let any Workspace run arbitrary code on the Gateway host and reach other Workspaces' data. Making that safe needs per-Workspace sandboxing (containers, resource limits, network isolation), which would be the hardest part of the whole system. Users who need a stdio-only server can run it elsewhere behind an stdio-to-HTTP bridge (e.g. `mcp-proxy`) and register the resulting URL.

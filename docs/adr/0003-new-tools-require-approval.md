@@ -1,0 +1,3 @@
+# Newly discovered tools require Tool Approval, even under wildcards
+
+When an Upstream Server starts offering a tool the Gateway has not seen before, that tool stays hidden from every User until a Workspace Admin approves it; a Role wildcard such as `github__*` covers only approved tools, never ones that appear later. Upstream Servers are run by third parties and can change without notice, and an upgrade that silently adds something like `github__delete_repo` to every Role holding `github__*` is exactly the unreviewed widening of access the Gateway exists to prevent. The cost is that admins must act before new tools are usable; we accept that. A future reader may take the wildcard's narrower meaning for a bug, but it is deliberate.
