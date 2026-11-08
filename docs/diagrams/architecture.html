@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mcp-gateway · Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #bf4520;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 1rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    .scroll { overflow-x: auto; }
+    svg { width: 100%; min-width: 1000px; display: block; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · mcp-gateway v1</p>
+    <h1>One Gateway in front of many MCP servers</h1>
+
+    <div class="scroll">
+    <svg viewBox="0 0 1000 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="architecture-title architecture-desc">
+      <title id="architecture-title">mcp-gateway v1 architecture</title>
+      <desc id="architecture-desc">MCP clients and the React Web UI call the Gateway, which signs Users in through Entra ID, stores state in PostgreSQL, may later use an optional Redis cache, and forwards tool calls to remote Upstream Servers.</desc>
+      <defs>
+        <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+          <circle cx="1" cy="1" r="0.9" fill="rgba(45,49,66,0.10)"/>
+        </pattern>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+      <rect width="100%" height="100%" fill="url(#dots)" opacity="0.55"/>
+
+      <!-- Zone: docker compose deployment -->
+      <rect x="292" y="64" width="288" height="404" rx="8"
+            fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <rect x="388" y="68" width="96" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="436" y="77" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace"
+            text-anchor="middle" letter-spacing="0.14em">DOCKER COMPOSE</text>
+
+      <!-- Arrows first (behind boxes) -->
+      <!-- MCP Client → Gateway (headline path) -->
+      <line x1="184" y1="144" x2="316" y2="144" stroke="#bf4520" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+      <!-- Gateway → Upstream Servers (headline path) -->
+      <line x1="556" y1="144" x2="812" y2="144" stroke="#bf4520" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+      <!-- Web UI → Gateway -->
+      <line x1="184" y1="264" x2="316" y2="264" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <!-- Gateway → Entra ID -->
+      <line x1="556" y1="264" x2="812" y2="264" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <!-- Gateway → PostgreSQL -->
+      <line x1="372" y1="312" x2="372" y2="380" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <!-- Gateway → Redis (optional, later) -->
+      <line x1="500" y1="312" x2="500" y2="380" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+      <!-- Arrow labels (masked, 8px gap above / beside the stroke) -->
+      <rect x="212" y="124" width="76" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="250" y="133" fill="#bf4520" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">MCP · HTTP</text>
+
+      <rect x="640" y="124" width="88" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="684" y="133" fill="#bf4520" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">TOOL CALLS</text>
+
+      <rect x="216" y="244" width="68" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="250" y="253" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">REST API</text>
+
+      <rect x="628" y="244" width="112" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="684" y="253" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">OIDC · GRAPH</text>
+
+      <rect x="380" y="340" width="28" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="394" y="349" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SQL</text>
+
+      <rect x="508" y="340" width="64" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="540" y="349" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">OPTIONAL</text>
+
+      <!-- Node: MCP Client (external) -->
+      <rect x="40" y="112" width="144" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="40" y="112" width="144" height="64" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+      <rect x="48" y="120" width="28" height="12" rx="2" fill="transparent" stroke="rgba(90,101,128,0.40)" stroke-width="0.8"/>
+      <text x="62" y="129" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXT</text>
+      <text x="112" y="148" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">MCP Client</text>
+      <text x="112" y="164" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Claude Code · Cursor</text>
+
+      <!-- Node: Web UI (frontend) -->
+      <rect x="40" y="232" width="144" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="40" y="232" width="144" height="64" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+      <rect x="48" y="240" width="28" height="12" rx="2" fill="transparent" stroke="rgba(90,101,128,0.40)" stroke-width="0.8"/>
+      <text x="62" y="249" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WEB</text>
+      <text x="112" y="268" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Web UI</text>
+      <text x="112" y="284" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">React + Vite</text>
+
+      <!-- Node: Gateway (focal backend) -->
+      <rect x="316" y="96" width="240" height="216" rx="6" fill="#f5f5f5"/>
+      <rect x="316" y="96" width="240" height="216" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+      <rect x="324" y="104" width="36" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+      <text x="342" y="113" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CORE</text>
+      <text x="436" y="148" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Gateway</text>
+      <text x="436" y="164" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Node.js · Hono · MCP SDK</text>
+      <line x1="340" y1="184" x2="532" y2="184" stroke="rgba(191,69,32,0.25)" stroke-width="0.8"/>
+      <text x="340" y="208" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace">MCP Endpoint · per Profile</text>
+      <text x="340" y="228" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace">OAuth Authorization Server</text>
+      <text x="340" y="248" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace">REST API · serves Web UI</text>
+      <text x="340" y="268" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace">Access Policy · Tool Catalog</text>
+      <text x="340" y="288" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace">Credential Vault · Audit</text>
+
+      <!-- Node: PostgreSQL (store) -->
+      <rect x="316" y="380" width="112" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="316" y="380" width="112" height="64" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <rect x="324" y="388" width="20" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+      <text x="334" y="397" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DB</text>
+      <text x="372" y="416" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">PostgreSQL</text>
+      <text x="372" y="432" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Drizzle ORM</text>
+
+      <!-- Node: Redis (optional, not in v1) -->
+      <rect x="444" y="380" width="112" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="444" y="380" width="112" height="64" rx="6" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+      <rect x="452" y="388" width="20" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+      <text x="462" y="397" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">KV</text>
+      <text x="500" y="416" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Redis</text>
+      <text x="500" y="432" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">cache · rate limit</text>
+
+      <!-- Node: Upstream Servers (external) -->
+      <rect x="812" y="112" width="148" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="812" y="112" width="148" height="64" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <rect x="820" y="120" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+      <text x="834" y="129" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXT</text>
+      <text x="886" y="148" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Upstream Servers</text>
+      <text x="886" y="164" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Streamable HTTP</text>
+
+      <!-- Node: Entra ID (external) -->
+      <rect x="812" y="232" width="148" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="812" y="232" width="148" height="64" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <rect x="820" y="240" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+      <text x="834" y="249" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">IDP</text>
+      <text x="886" y="268" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Entra ID</text>
+      <text x="886" y="284" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">one Entra Tenant</text>
+
+      <!-- Legend strip -->
+      <line x1="40" y1="492" x2="960" y2="492" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="40" y="508" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+
+      <rect x="40" y="524" width="14" height="10" rx="2" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+      <text x="60" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Gateway (focal)</text>
+
+      <rect x="164" y="524" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="184" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Store</text>
+
+      <rect x="244" y="524" width="14" height="10" rx="2" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="264" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Optional · not in v1</text>
+
+      <rect x="384" y="524" width="14" height="10" rx="2" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+      <text x="404" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Client</text>
+
+      <rect x="464" y="524" width="14" height="10" rx="2" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <text x="484" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">External service</text>
+
+      <line x1="604" y1="530" x2="632" y2="530" stroke="#bf4520" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+      <text x="640" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Tool-call path</text>
+
+      <line x1="736" y1="530" x2="764" y2="530" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <text x="772" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">HTTP / API</text>
+
+      <line x1="856" y1="530" x2="884" y2="530" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+      <text x="892" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Optional</text>
+    </svg>
+    </div>
+  </div>
+</body>
+</html>
