@@ -46,11 +46,17 @@ interface Discovery {
 
 const base64url = (bytes: Buffer) => bytes.toString("base64url");
 
+/** A URL under the configured Entra Tenant at the Entra authority, e.g. `v2.0/.well-known/openid-configuration`. */
+export function entraTenantUrl(config: Config, path: string): URL {
+  const { authorityUrl, tenantId } = config.entra;
+  const authority = authorityUrl.href.endsWith("/") ? authorityUrl.href : `${authorityUrl.href}/`;
+  return new URL(`${tenantId}/${path}`, authority);
+}
+
 /** Signs people in through the one configured Entra Tenant (ADR 0002) using OIDC. */
 export function createIdentity({ config, clock, database }: { config: Config; clock: Clock; database: Database }) {
-  const { tenantId, clientId, clientSecret, authorityUrl } = config.entra;
-  const authority = authorityUrl.href.endsWith("/") ? authorityUrl.href : `${authorityUrl.href}/`;
-  const discoveryUrl = new URL(`${tenantId}/v2.0/.well-known/openid-configuration`, authority);
+  const { tenantId, clientId, clientSecret } = config.entra;
+  const discoveryUrl = entraTenantUrl(config, "v2.0/.well-known/openid-configuration");
   const db = database.db;
 
   let discovery: Promise<{ metadata: Discovery; keys: ReturnType<typeof createRemoteJWKSet> }> | undefined;

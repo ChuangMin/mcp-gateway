@@ -164,6 +164,7 @@ export async function bootGateway(options: BootOptions = {}): Promise<TestGatewa
         ENTRA_CLIENT_ID: clientId,
         ENTRA_CLIENT_SECRET: clientSecret,
         ENTRA_AUTHORITY_URL: entra.url,
+        GRAPH_BASE_URL: entra.graphUrl,
         ...options.env,
       },
       clock,
