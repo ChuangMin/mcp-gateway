@@ -71,7 +71,7 @@ The name the Gateway exposes for an Upstream Server's tool: the Server Prefix, t
 _Avoid_: Full name, qualified name
 
 **Tool Approval**:
-A Workspace Admin's decision to expose a tool newly discovered on an Upstream Server; until approved, no Role grants it, not even through a wildcard.
+A Workspace Admin's decision to expose a tool newly discovered on an Upstream Server; until approved, no Role grants it, not even through a wildcard. An approval covers one version of the tool (its description and input schema, identified by a fingerprint): if either changes, the tool is suspended until approved again.
 _Avoid_: Whitelisting, enablement
 
 **Tool Alias**:

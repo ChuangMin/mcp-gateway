@@ -28,6 +28,8 @@ const DIRECTORY_STATUS: Record<DirectoryErrorCode, ContentfulStatusCode> = {
 const UPSTREAM_STATUS: Record<UpstreamErrorCode, ContentfulStatusCode> = {
   server_not_found: 404,
   prefix_taken: 409,
+  tool_not_found: 404,
+  tool_changed: 409,
 };
 
 /** Turns refusals from handlers and domain modules into `ErrorResponse`s. Anything else is a 500. */

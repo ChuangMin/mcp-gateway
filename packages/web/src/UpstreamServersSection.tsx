@@ -7,6 +7,7 @@ import type {
 } from "@mcp-gateway/server/api";
 import { api, errorMessage } from "./api.ts";
 import { cell, errorText, muted, row, table } from "./styles.ts";
+import { ToolReview } from "./ToolReview.tsx";
 
 const time = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "never");
 const fieldList = (text: string) => text.split(/[\s,;]+/).filter(Boolean);
@@ -79,6 +80,9 @@ export function UpstreamServersSection({ workspaceId, isAdmin }: { workspaceId: 
                   <div>
                     <span style={{ color: server.status === "online" ? "#1b7f3b" : "#b00020" }}>● {server.status}</span>
                     <span style={muted}> · last contact {time(server.lastContactAt)}</span>
+                    {server.toolsAwaitingReview > 0 && (
+                      <strong style={{ color: "#8a5a00" }}> · {server.toolsAwaitingReview} tool(s) awaiting review</strong>
+                    )}
                   </div>
                   {server.lastError && <div style={errorText}>Last error: {server.lastError}</div>}
                   <button type="button" onClick={() => setOpen(open === server.id ? undefined : server.id)}>
@@ -140,22 +144,11 @@ function ServerDetails({
       </p>
 
       <h4>Tools</h4>
-      {server.tools.length === 0 ? (
-        <p style={muted}>No tools discovered.</p>
-      ) : (
-        <ul>
-          {server.tools.map((tool) => (
-            <li key={tool.name}>
-              <code>{tool.namespacedName}</code> <span style={muted}>({tool.approval})</span>
-              {tool.description && <div>{tool.description}</div>}
-              <details>
-                <summary style={muted}>Input schema</summary>
-                <pre style={{ fontSize: "0.8rem", overflowX: "auto" }}>{JSON.stringify(tool.inputSchema, null, 2)}</pre>
-              </details>
-            </li>
-          ))}
-        </ul>
-      )}
+      <p style={muted}>
+        New tools stay hidden from everyone until approved. An approved tool whose description or input schema
+        changes is suspended until approved again.
+      </p>
+      <ToolReview tools={server.tools} path={path} isAdmin={isAdmin} run={run} onDecided={reload} />
 
       {isAdmin && (
         <>
