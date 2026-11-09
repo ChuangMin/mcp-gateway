@@ -4,8 +4,10 @@ import { inject } from "vitest";
 import { startGateway, type RunningGateway } from "../../src/gateway.js";
 import type { Clock } from "../../src/clock.js";
 import { FakeEntra, type EntraPerson } from "./fake-entra.js";
+import { FakeUpstream, type FakeUpstreamOptions } from "./fake-upstream.js";
 
 export type { EntraPerson } from "./fake-entra.js";
+export type { FakeUpstream, FakeTool } from "./fake-upstream.js";
 
 /** A clock tests can set and move. */
 export class TestClock implements Clock {
@@ -136,7 +138,11 @@ export interface TestGateway {
   signedIn(person: EntraPerson): Promise<Browser>;
   /** The fake Entra the Gateway is configured with. */
   entra: FakeEntra;
+  /** Starts a fake Upstream Server, closed along with the Gateway. */
+  upstream(options?: FakeUpstreamOptions): Promise<FakeUpstream>;
   clock: TestClock;
+  /** Runs SQL against the Gateway's database, for asserting what is stored at rest. */
+  query<T extends pg.QueryResultRow = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
   /** Drops the Gateway's database out from under it, to simulate the database becoming unreachable. */
   dropDatabase(): Promise<void>;
   close(): Promise<void>;
@@ -177,6 +183,7 @@ export async function bootGateway(options: BootOptions = {}): Promise<TestGatewa
     throw error;
   }
   const browser = () => new Browser(gateway.url, entra);
+  const upstreams: FakeUpstream[] = [];
   return {
     http: (path, init) => fetch(new URL(path, gateway.url), init),
     browser,
@@ -189,10 +196,25 @@ export async function bootGateway(options: BootOptions = {}): Promise<TestGatewa
       return b;
     },
     entra,
+    upstream: async (upstreamOptions) => {
+      const upstream = await FakeUpstream.start(upstreamOptions);
+      upstreams.push(upstream);
+      return upstream;
+    },
     clock,
+    query: async (sql, params) => {
+      const client = new pg.Client({ connectionString: database.url });
+      await client.connect();
+      try {
+        return (await client.query(sql, params)).rows;
+      } finally {
+        await client.end();
+      }
+    },
     dropDatabase: database.drop,
     close: async () => {
       await gateway.close();
+      await Promise.all(upstreams.map((u) => u.close()));
       await entra.close();
       await database.drop();
     },

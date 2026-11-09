@@ -3,6 +3,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { ErrorResponse } from "../api/schemas.js";
 import { DirectoryError, type DirectoryErrorCode } from "../directory/directory.js";
 import { EntraUnavailableError } from "../identity/entra-directory.js";
+import { UpstreamError, type UpstreamErrorCode } from "../upstream/registry.js";
 
 /** A REST API refusal with a status and an `ErrorResponse` body. Throw it from a handler. */
 export class ApiError extends Error {
@@ -24,12 +25,18 @@ const DIRECTORY_STATUS: Record<DirectoryErrorCode, ContentfulStatusCode> = {
   last_workspace_admin: 409,
 };
 
+const UPSTREAM_STATUS: Record<UpstreamErrorCode, ContentfulStatusCode> = {
+  server_not_found: 404,
+  prefix_taken: 409,
+};
+
 /** Turns refusals from handlers and domain modules into `ErrorResponse`s. Anything else is a 500. */
 export const apiErrorHandler: ErrorHandler = (err, c) => {
   const reply = (status: ContentfulStatusCode, error: string, message: string) =>
     c.json({ error, message } satisfies ErrorResponse, status);
   if (err instanceof ApiError) return reply(err.status, err.code, err.message);
   if (err instanceof DirectoryError) return reply(DIRECTORY_STATUS[err.code], err.code, err.message);
+  if (err instanceof UpstreamError) return reply(UPSTREAM_STATUS[err.code], err.code, err.message);
   if (err instanceof EntraUnavailableError) {
     console.error(err.message);
     return reply(502, "entra_unavailable", "Entra could not be reached; try again shortly");

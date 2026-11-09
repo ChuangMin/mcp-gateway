@@ -5,7 +5,10 @@ import { systemClock, type Clock } from "./clock.js";
 import { loadConfig } from "./config.js";
 import { openDatabase } from "./db/database.js";
 import { createApp } from "./http/app.js";
+import { createCredentialVault } from "./credential-vault.js";
 import { createDirectory } from "./directory/directory.js";
+import { createUpstreamConnector } from "./upstream/connector.js";
+import { createUpstreamRegistry } from "./upstream/registry.js";
 import { createEntraDirectory } from "./identity/entra-directory.js";
 import { createIdentity } from "./identity/identity.js";
 import { createWebSessions } from "./web-sessions.js";
@@ -44,6 +47,12 @@ export async function startGateway(options: StartOptions): Promise<RunningGatewa
     identity: createIdentity({ config, clock, database }),
     sessions: createWebSessions({ database, clock }),
     directory: createDirectory({ database, clock, entra: createEntraDirectory({ config, clock }) }),
+    upstreams: createUpstreamRegistry({
+      database,
+      clock,
+      vault: createCredentialVault(config.encryptionKey),
+      connector: createUpstreamConnector(),
+    }),
     webDistDir: options.webDistDir ?? defaultWebDistDir,
   });
   const hostname = options.hostname ?? "127.0.0.1";

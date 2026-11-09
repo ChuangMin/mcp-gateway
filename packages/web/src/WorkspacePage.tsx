@@ -3,6 +3,7 @@ import type { Member, MemberList, Standing, WorkspaceSummary } from "@mcp-gatewa
 import { ApiError, api, errorMessage } from "./api.ts";
 import { link } from "./router.ts";
 import { cell, errorText, muted, row, table } from "./styles.ts";
+import { UpstreamServersSection } from "./UpstreamServersSection.tsx";
 
 export const STANDING_LABEL: Record<Standing, string> = { admin: "Workspace Admin", member: "Member" };
 
@@ -71,6 +72,8 @@ export function WorkspacePage({ workspaceId, currentUserId }: { workspaceId: str
           {error}
         </p>
       )}
+
+      <UpstreamServersSection workspaceId={workspaceId} isAdmin={isAdmin} />
 
       <h3>Members</h3>
       {isAdmin && (

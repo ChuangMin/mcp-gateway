@@ -15,6 +15,13 @@
       "when": 1794234293350,
       "tag": "0001_workspaces_and_memberships",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794235165080,
+      "tag": "0002_upstream_servers",
+      "breakpoints": true
     }
   ]
 }
