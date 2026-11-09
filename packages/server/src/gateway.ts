@@ -5,6 +5,8 @@ import { systemClock, type Clock } from "./clock.js";
 import { loadConfig } from "./config.js";
 import { openDatabase } from "./db/database.js";
 import { createApp } from "./http/app.js";
+import { createIdentity } from "./identity/identity.js";
+import { createWebSessions } from "./web-sessions.js";
 
 export interface StartOptions {
   env: Record<string, string | undefined>;
@@ -33,7 +35,14 @@ export async function startGateway(options: StartOptions): Promise<RunningGatewa
     await database.close();
     throw error;
   }
-  const app = createApp({ clock, database, webDistDir: options.webDistDir ?? defaultWebDistDir });
+  const app = createApp({
+    config,
+    clock,
+    database,
+    identity: createIdentity({ config, clock, database }),
+    sessions: createWebSessions({ database, clock }),
+    webDistDir: options.webDistDir ?? defaultWebDistDir,
+  });
   const hostname = options.hostname ?? "127.0.0.1";
 
   const server = await new Promise<ReturnType<typeof serve>>((resolve) => {
