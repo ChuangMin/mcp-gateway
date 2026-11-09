@@ -4,7 +4,7 @@ A self-hosted gateway that aggregates many MCP servers behind one endpoint and c
 
 Domain vocabulary: [`GLOSSARY.md`](GLOSSARY.md). Design decisions: [`docs/adr/`](docs/adr/). Architecture: [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html).
 
-> Status: walking skeleton. The Gateway starts, validates its configuration, migrates its database, answers `/health`, serves its OpenAPI document and an empty Web UI. Sign-in, Workspaces and tool calls arrive in later tickets.
+> Status: early. The Gateway starts, validates its configuration, migrates its database, answers `/health`, serves its OpenAPI document, and signs people in to the Web UI through Entra. Workspaces and tool calls arrive in later tickets.
 
 ## Run with Docker
 
@@ -50,6 +50,17 @@ All configuration comes from environment variables; [`.env.example`](.env.exampl
 | `GRAPH_BASE_URL` | no | Default `https://graph.microsoft.com` |
 | `PORT` / `HOST` | no | Default `3000` / `0.0.0.0` |
 | `WEB_DIST_DIR` | no | Web UI build output; defaults to `packages/web/dist` |
+
+## Entra app registration
+
+The Gateway signs people in to the Web UI with OpenID Connect (authorization code flow with PKCE) against `ENTRA_TENANT_ID`, and rejects accounts from any other tenant. The app registration needs:
+
+- **Supported account types**: accounts in this organizational directory only.
+- **Redirect URI** (platform *Web*): `<PUBLIC_BASE_URL>/auth/callback`.
+- **A client secret**, given to the Gateway as `ENTRA_CLIENT_SECRET`.
+- **An app role** with value `PlatformAdmin` (allowed member types: users/groups). Whoever is assigned it in *Enterprise applications* is a Platform Admin; the Gateway reads the role from the ID token at each sign-in, so removing the assignment takes effect at the person's next sign-in.
+
+A Web UI session lasts 12 hours.
 
 ## Database migrations
 

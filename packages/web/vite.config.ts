@@ -8,6 +8,8 @@ export default defineConfig({
     proxy: {
       "/health": "http://127.0.0.1:3000",
       "/openapi.json": "http://127.0.0.1:3000",
+      "/api": "http://127.0.0.1:3000",
+      "/auth": "http://127.0.0.1:3000",
     },
   },
 });
