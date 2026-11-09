@@ -4,7 +4,7 @@ A self-hosted gateway that aggregates many MCP servers behind one endpoint and c
 
 Domain vocabulary: [`GLOSSARY.md`](GLOSSARY.md). Design decisions: [`docs/adr/`](docs/adr/). Architecture: [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html).
 
-> Status: early. The Gateway starts, validates its configuration, migrates its database, answers `/health`, serves its OpenAPI document, signs people in to the Web UI through Entra, and manages Workspaces and their members. Upstream Servers and tool calls arrive in later tickets.
+> Status: early. The Gateway starts, validates its configuration, migrates its database, answers `/health`, serves its OpenAPI document, signs people in to the Web UI through Entra, manages Workspaces and their members, and registers Upstream Servers (with encrypted Shared Credentials) and discovers their tools. Tool Approval, Roles and tool calls arrive in later tickets.
 
 ## Run with Docker
 

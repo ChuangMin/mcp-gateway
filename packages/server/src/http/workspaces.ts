@@ -1,5 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import type { Context } from "hono";
 import {
   AddMemberRequest,
   CreateWorkspaceRequest,
@@ -11,11 +10,11 @@ import {
   Workspace,
   WorkspaceList,
   WorkspaceSummary,
-  type Standing,
 } from "../api/schemas.js";
 import type { Directory, Workspace as WorkspaceRow } from "../directory/directory.js";
 import type { SessionEnv } from "./auth.js";
-import { ApiError, validationHook } from "./errors.js";
+import { requirePlatformAdmin, standingGuard, workspaceNotFound } from "./authorize.js";
+import { validationHook } from "./errors.js";
 
 const json = <T extends z.ZodType>(schema: T, description: string) => ({
   description,
@@ -155,25 +154,11 @@ const removeMember = createRoute({
 
 const toWorkspace = (w: WorkspaceRow) => ({ id: w.id, name: w.name, createdAt: w.createdAt.toISOString() });
 
-const forbidden = (message: string) => new ApiError(403, "forbidden", message);
-// A Workspace the User doesn't belong to looks the same as one that doesn't exist.
-const workspaceNotFound = () => new ApiError(404, "workspace_not_found", "No such Workspace");
-
 /** Workspace lifecycle (Platform Admin) and membership (by standing in the Workspace). */
 export function workspaceRoutes(directory: Directory) {
   const app = new OpenAPIHono<SessionEnv>({ defaultHook: validationHook });
 
-  const requirePlatformAdmin = (c: Context<SessionEnv>) => {
-    if (!c.var.user.isPlatformAdmin) throw forbidden("Only a Platform Admin can do this");
-  };
-
-  /** The signed-in User's standing in the Workspace, refusing anyone below `needed`. */
-  const requireStanding = async (c: Context<SessionEnv>, workspaceId: string, needed: Standing) => {
-    const standing = await directory.standingOf(workspaceId, c.var.user.id);
-    if (standing === undefined) throw workspaceNotFound();
-    if (needed === "admin" && standing !== "admin") throw forbidden("Only a Workspace Admin can do this");
-    return standing;
-  };
+  const requireStanding = standingGuard(directory);
 
   app.openapi(listWorkspaces, async (c) => {
     requirePlatformAdmin(c);
