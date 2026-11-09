@@ -2,6 +2,7 @@
 // transport and nothing here (or anywhere in the Gateway) launches a process (ADR 0001).
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 
 export interface DiscoveredTool {
   name: string;
@@ -9,11 +10,22 @@ export interface DiscoveredTool {
   inputSchema: Record<string, unknown>;
 }
 
-export type ProbeResult = { ok: true; tools: DiscoveredTool[] } | { ok: false; error: string };
+/** A live MCP session with one Upstream Server. */
+export interface UpstreamSession {
+  /** Lists every tool the server offers, following pagination. */
+  listTools(): Promise<DiscoveredTool[]>;
+  /** False once the connection has closed or failed; a new session is needed then. */
+  readonly open: boolean;
+  /** Ends the session, telling the server so. Never throws. */
+  close(): Promise<void>;
+}
 
 export interface UpstreamConnector {
-  /** Connects to an Upstream Server with the given headers and lists its tools. Never throws. */
-  probe(url: string, headers: Record<string, string>): Promise<ProbeResult>;
+  /**
+   * Opens an MCP session with an Upstream Server, sending `headers` on every request. `onToolsChanged` is called
+   * whenever the server sends `notifications/tools/list_changed` (if it offers a stream to send it on).
+   */
+  connect(url: string, headers: Record<string, string>, onToolsChanged: () => void): Promise<UpstreamSession>;
 }
 
 const TIMEOUT_MS = 10_000;
@@ -38,7 +50,7 @@ export function describeError(error: unknown): string {
 
 export function createUpstreamConnector(): UpstreamConnector {
   return {
-    async probe(url, headers) {
+    async connect(url, headers, onToolsChanged) {
       const client = new Client(CLIENT_INFO);
       const transport = new StreamableHTTPClientTransport(new URL(url), {
         // A redirect could carry the Shared Credential's headers to another host. Stated explicitly rather than
@@ -46,24 +58,44 @@ export function createUpstreamConnector(): UpstreamConnector {
         redirectPolicy: "same-origin",
         requestInit: { headers, redirect: "error" },
       });
+      let open = true;
+      client.onclose = () => {
+        open = false;
+      };
+      client.setNotificationHandler(ToolListChangedNotificationSchema, () => onToolsChanged());
+
+      const close = async () => {
+        open = false;
+        await transport.terminateSession().catch(() => {});
+        await client.close().catch(() => {});
+      };
+
       try {
         await client.connect(transport, { timeout: TIMEOUT_MS });
-        const tools: DiscoveredTool[] = [];
-        let cursor: string | undefined;
-        for (let page = 0; page < MAX_TOOL_PAGES; page++) {
-          const result = await client.listTools(cursor === undefined ? {} : { cursor }, { timeout: TIMEOUT_MS });
-          for (const tool of result.tools) {
-            tools.push({ name: tool.name, description: tool.description, inputSchema: tool.inputSchema });
-          }
-          cursor = result.nextCursor;
-          if (cursor === undefined) break;
-        }
-        return { ok: true, tools };
       } catch (error) {
-        return { ok: false, error: describeError(error) };
-      } finally {
-        await client.close().catch(() => {});
+        await close();
+        throw error;
       }
+
+      return {
+        get open() {
+          return open;
+        },
+        close,
+        async listTools() {
+          const tools: DiscoveredTool[] = [];
+          let cursor: string | undefined;
+          for (let page = 0; page < MAX_TOOL_PAGES; page++) {
+            const result = await client.listTools(cursor === undefined ? {} : { cursor }, { timeout: TIMEOUT_MS });
+            for (const tool of result.tools) {
+              tools.push({ name: tool.name, description: tool.description, inputSchema: tool.inputSchema });
+            }
+            cursor = result.nextCursor;
+            if (cursor === undefined) break;
+          }
+          return tools;
+        },
+      };
     },
   };
 }

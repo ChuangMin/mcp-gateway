@@ -59,13 +59,16 @@ describe("registering an Upstream Server", () => {
       lastError: null,
       lastContactAt: gateway.clock.now().toISOString(),
       createdAt: gateway.clock.now().toISOString(),
+      toolsAwaitingReview: 2,
       tools: [
         {
           name: "create_issue",
           namespacedName: "github__create_issue",
           description: null,
           inputSchema: { type: "object" },
+          fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
           approval: "pending",
+          previouslyApproved: null,
           discoveredAt: gateway.clock.now().toISOString(),
         },
         {
@@ -73,7 +76,9 @@ describe("registering an Upstream Server", () => {
           namespacedName: "github__search",
           description: "Searches issues",
           inputSchema: SEARCH.inputSchema,
+          fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
           approval: "pending",
+          previouslyApproved: null,
           discoveredAt: gateway.clock.now().toISOString(),
         },
       ],

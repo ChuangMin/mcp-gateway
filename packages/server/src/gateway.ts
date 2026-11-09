@@ -8,6 +8,7 @@ import { createApp } from "./http/app.js";
 import { createCredentialVault } from "./credential-vault.js";
 import { createDirectory } from "./directory/directory.js";
 import { createUpstreamConnector } from "./upstream/connector.js";
+import { createToolDiscovery } from "./upstream/discovery.js";
 import { createUpstreamRegistry } from "./upstream/registry.js";
 import { createEntraDirectory } from "./identity/entra-directory.js";
 import { createIdentity } from "./identity/identity.js";
@@ -21,6 +22,8 @@ export interface StartOptions {
   hostname?: string;
   /** Defaults to the web package's build output inside this repository. */
   webDistDir?: string;
+  /** How often (real time) to check which Upstream Servers are due for tool re-discovery. Tests shorten it. */
+  discoveryTickMs?: number;
 }
 
 export interface RunningGateway {
@@ -40,6 +43,15 @@ export async function startGateway(options: StartOptions): Promise<RunningGatewa
     await database.close();
     throw error;
   }
+  const vault = createCredentialVault(config.encryptionKey);
+  const discovery = createToolDiscovery({
+    database,
+    clock,
+    vault,
+    connector: createUpstreamConnector(),
+    intervalMs: config.toolDiscoveryIntervalMs,
+    tickMs: options.discoveryTickMs ?? 5_000,
+  });
   const app = createApp({
     config,
     clock,
@@ -47,12 +59,7 @@ export async function startGateway(options: StartOptions): Promise<RunningGatewa
     identity: createIdentity({ config, clock, database }),
     sessions: createWebSessions({ database, clock }),
     directory: createDirectory({ database, clock, entra: createEntraDirectory({ config, clock }) }),
-    upstreams: createUpstreamRegistry({
-      database,
-      clock,
-      vault: createCredentialVault(config.encryptionKey),
-      connector: createUpstreamConnector(),
-    }),
+    upstreams: createUpstreamRegistry({ database, clock, vault, discovery }),
     webDistDir: options.webDistDir ?? defaultWebDistDir,
   });
   const hostname = options.hostname ?? "127.0.0.1";
@@ -61,11 +68,13 @@ export async function startGateway(options: StartOptions): Promise<RunningGatewa
     const s = serve({ fetch: app.fetch, port: options.port ?? 3000, hostname }, () => resolve(s));
   });
   const { port } = server.address() as AddressInfo;
+  discovery.start();
 
   return {
     url: `http://${hostname === "0.0.0.0" ? "127.0.0.1" : hostname}:${port}`,
     close: async () => {
       await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+      await discovery.stop();
       await database.close();
     },
   };

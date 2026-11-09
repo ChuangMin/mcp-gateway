@@ -20,6 +20,9 @@ function guid(name: string) {
   return required(name).regex(GUID, `${name} must be a GUID`);
 }
 
+const DEFAULT_DISCOVERY_INTERVAL_SECONDS = 300;
+const MIN_DISCOVERY_INTERVAL_SECONDS = 10;
+
 const EnvSchema = z.object({
   DATABASE_URL: url("DATABASE_URL", ["postgres:", "postgresql:"], "DATABASE_URL must be a postgres:// URL"),
   PUBLIC_BASE_URL: httpUrl("PUBLIC_BASE_URL"),
@@ -34,6 +37,15 @@ const EnvSchema = z.object({
   ENTRA_CLIENT_SECRET: required("ENTRA_CLIENT_SECRET"),
   ENTRA_AUTHORITY_URL: httpUrl("ENTRA_AUTHORITY_URL").default("https://login.microsoftonline.com"),
   GRAPH_BASE_URL: httpUrl("GRAPH_BASE_URL").default("https://graph.microsoft.com"),
+  TOOL_DISCOVERY_INTERVAL_SECONDS: z
+    .string()
+    .trim()
+    .regex(/^\d+$/, "TOOL_DISCOVERY_INTERVAL_SECONDS must be a whole number of seconds")
+    .transform(Number)
+    .refine((seconds) => seconds >= MIN_DISCOVERY_INTERVAL_SECONDS, {
+      error: `TOOL_DISCOVERY_INTERVAL_SECONDS must be at least ${MIN_DISCOVERY_INTERVAL_SECONDS}`,
+    })
+    .default(DEFAULT_DISCOVERY_INTERVAL_SECONDS),
 });
 
 export interface Config {
@@ -47,6 +59,8 @@ export interface Config {
     authorityUrl: URL;
   };
   graphBaseUrl: URL;
+  /** How often the Gateway asks each Upstream Server for its tools, besides when the server says they changed. */
+  toolDiscoveryIntervalMs: number;
 }
 
 export class ConfigError extends Error {
@@ -77,5 +91,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
       authorityUrl: new URL(e.ENTRA_AUTHORITY_URL),
     },
     graphBaseUrl: new URL(e.GRAPH_BASE_URL),
+    toolDiscoveryIntervalMs: e.TOOL_DISCOVERY_INTERVAL_SECONDS * 1000,
   };
 }

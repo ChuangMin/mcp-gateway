@@ -48,6 +48,7 @@ All configuration comes from environment variables; [`.env.example`](.env.exampl
 | `ENTRA_CLIENT_SECRET` | yes | That app registration's client secret |
 | `ENTRA_AUTHORITY_URL` | no | Default `https://login.microsoftonline.com` |
 | `GRAPH_BASE_URL` | no | Default `https://graph.microsoft.com` |
+| `TOOL_DISCOVERY_INTERVAL_SECONDS` | no | How often each Upstream Server is asked for its tools, besides whenever it says they changed. Default `300`, minimum `10` |
 | `PORT` / `HOST` | no | Default `3000` / `0.0.0.0` |
 | `WEB_DIST_DIR` | no | Web UI build output; defaults to `packages/web/dist` |
 

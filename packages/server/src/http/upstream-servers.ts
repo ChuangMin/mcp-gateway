@@ -3,6 +3,8 @@ import {
   ErrorResponse,
   RegisterServerRequest,
   ReplaceCredentialRequest,
+  ToolDecisionRequest,
+  ToolList,
   UpdateServerRequest,
   UpstreamServer,
   UpstreamServerDetail,
@@ -94,6 +96,23 @@ const unregisterServer = createRoute({
   responses: { 204: { description: "Unregistered" }, ...common },
 });
 
+const decideTools = createRoute({
+  method: "post",
+  path: `${servers}/{serverId}/tools/approval`,
+  summary: "Approves, rejects or revokes tools, one or many at once (Workspace Admin)",
+  description:
+    "All or nothing: if any tool is unknown or has changed since it was reviewed, no decision is recorded. " +
+    "Tools the Upstream Server no longer offers are unknown.",
+  security,
+  request: { params: ServerParams, body: jsonBody(ToolDecisionRequest) },
+  responses: {
+    200: json(ToolList, "Recorded; the server's tools as they now stand"),
+    ...common,
+    404: error("No such Workspace, Upstream Server or tool (`tool_not_found`)"),
+    409: error("`tool_changed`: a tool being approved no longer has the fingerprint given; review it again"),
+  },
+});
+
 const toServer = (s: ServerRow) => ({
   id: s.id,
   prefix: s.prefix,
@@ -104,6 +123,7 @@ const toServer = (s: ServerRow) => ({
   lastError: s.lastError,
   lastContactAt: s.lastContactAt?.toISOString() ?? null,
   createdAt: s.createdAt.toISOString(),
+  toolsAwaitingReview: s.toolsAwaitingReview,
 });
 
 const toTool = (prefix: string, t: ToolRow) => ({
@@ -111,7 +131,12 @@ const toTool = (prefix: string, t: ToolRow) => ({
   namespacedName: namespacedToolName(prefix, t.name),
   description: t.description,
   inputSchema: t.inputSchema as Record<string, unknown>,
-  approval: t.approval,
+  fingerprint: t.fingerprint,
+  approval: t.state,
+  previouslyApproved:
+    t.state === "changed"
+      ? { description: t.approvedDescription, inputSchema: t.approvedInputSchema as Record<string, unknown> }
+      : null,
   discoveredAt: t.discoveredAt.toISOString(),
 });
 
@@ -120,10 +145,8 @@ export function upstreamServerRoutes(directory: Directory, registry: UpstreamReg
   const app = new OpenAPIHono<SessionEnv>({ defaultHook: validationHook });
   const requireStanding = standingGuard(directory);
 
-  const detail = async (server: ServerRow) => ({
-    ...toServer(server),
-    tools: (await registry.tools(server.id)).map((t) => toTool(server.prefix, t)),
-  });
+  const toolsOf = async (server: ServerRow) => (await registry.tools(server.id)).map((t) => toTool(server.prefix, t));
+  const detail = async (server: ServerRow) => ({ ...toServer(server), tools: await toolsOf(server) });
 
   app.openapi(listServers, async (c) => {
     const { workspaceId } = c.req.valid("param");
@@ -155,6 +178,14 @@ export function upstreamServerRoutes(directory: Directory, registry: UpstreamReg
     await requireStanding(c, workspaceId, "admin");
     const { headers } = c.req.valid("json");
     return c.json(await detail(await registry.replaceCredential(workspaceId, serverId, headers)), 200);
+  });
+
+  app.openapi(decideTools, async (c) => {
+    const { workspaceId, serverId } = c.req.valid("param");
+    await requireStanding(c, workspaceId, "admin");
+    const { decision, tools } = c.req.valid("json");
+    await registry.decide(workspaceId, serverId, decision, tools);
+    return c.json({ tools: await toolsOf(await registry.get(workspaceId, serverId)) }, 200);
   });
 
   app.openapi(unregisterServer, async (c) => {

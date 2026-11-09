@@ -223,11 +223,19 @@ export const UpstreamServer = z
     lastError: z.string().nullable().openapi({ description: "Why the last connection attempt failed, if it did" }),
     lastContactAt: z.string().nullable().openapi({ format: "date-time", description: "Last successful contact" }),
     createdAt: z.string().openapi({ format: "date-time" }),
+    toolsAwaitingReview: z.number().int().openapi({
+      description: "Tools a Workspace Admin has yet to decide on: `pending` ones and `changed` ones",
+    }),
   })
   .openapi("UpstreamServer");
 export type UpstreamServer = z.infer<typeof UpstreamServer>;
 
-export const ToolApproval = z.enum(["pending", "approved"]).openapi("ToolApproval");
+export const ToolApproval = z.enum(["pending", "approved", "rejected", "changed"]).openapi("ToolApproval", {
+  description:
+    "Where a tool stands (ADR 0003). New tools start `pending`. `changed`: it was approved, but its description or " +
+    "input schema has changed since, so it is suspended until a Workspace Admin approves the new version (it " +
+    "becomes `approved` again by itself if the tool changes back).",
+});
 export type ToolApproval = z.infer<typeof ToolApproval>;
 
 export const UpstreamTool = z
@@ -236,7 +244,14 @@ export const UpstreamTool = z
     namespacedName: z.string().openapi({ example: "github__search" }),
     description: z.string().nullable(),
     inputSchema: z.record(z.string(), z.unknown()),
+    fingerprint: z.string().openapi({
+      description: "Identifies this version of the description and input schema; approving a tool names it",
+    }),
     approval: ToolApproval,
+    previouslyApproved: z
+      .object({ description: z.string().nullable(), inputSchema: z.record(z.string(), z.unknown()) })
+      .nullable()
+      .openapi({ description: "For a `changed` tool, the version that was approved; otherwise null" }),
     discoveredAt: z.string().openapi({ format: "date-time" }),
   })
   .openapi("UpstreamTool");
@@ -247,5 +262,33 @@ export const UpstreamServerDetail = UpstreamServer.extend({ tools: z.array(Upstr
 );
 export type UpstreamServerDetail = z.infer<typeof UpstreamServerDetail>;
 
-export const UpstreamServerList = z.object({ servers: z.array(UpstreamServer) }).openapi("UpstreamServerList");
+export const ToolDecisionRequest = z
+  .strictObject({
+    decision: z.enum(["approved", "rejected", "pending"]).openapi({
+      description: "`approved` or `rejected`; `pending` revokes an earlier decision",
+    }),
+    tools: z
+      .array(
+        z.strictObject({
+          name: z.string().min(1).openapi({ description: "The tool's original name on the Upstream Server" }),
+          fingerprint: z
+            .string()
+            .optional()
+            .openapi({ description: "Required to approve: the `fingerprint` of the version reviewed" }),
+        }),
+      )
+      .min(1)
+      .max(1000),
+  })
+  .refine((body) => body.decision !== "approved" || body.tools.every((tool) => tool.fingerprint !== undefined), {
+    error: "approving a tool needs the fingerprint of the version reviewed",
+    path: ["tools"],
+  })
+  .openapi("ToolDecisionRequest");
+export type ToolDecisionRequest = z.infer<typeof ToolDecisionRequest>;
+
+export const ToolList = z.object({ tools: z.array(UpstreamTool) }).openapi("ToolList");
+export type ToolList = z.infer<typeof ToolList>;
+
+export const UpstreamServerList =z.object({ servers: z.array(UpstreamServer) }).openapi("UpstreamServerList");
 export type UpstreamServerList = z.infer<typeof UpstreamServerList>;

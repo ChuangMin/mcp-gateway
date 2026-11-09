@@ -121,7 +121,11 @@ export const upstreamServers = pgTable(
   (t) => [unique("upstream_servers_workspace_prefix_unique").on(t.workspaceId, t.prefix)],
 );
 
-export const toolApproval = pgEnum("tool_approval", ["pending", "approved"]);
+/**
+ * A Workspace Admin's decision on a tool (ADR 0003). `approved` covers one version of the tool, identified by its
+ * fingerprint; a tool whose current fingerprint differs from the approved one is suspended until re-approved.
+ */
+export const toolApproval = pgEnum("tool_approval", ["pending", "approved", "rejected"]);
 
 /** A tool discovered on an Upstream Server. */
 export const upstreamTools = pgTable(
@@ -135,10 +139,16 @@ export const upstreamTools = pgTable(
     name: text("name").notNull(),
     description: text("description"),
     inputSchema: jsonb("input_schema").notNull(),
-    /** SHA-256 of the canonical JSON of the input schema, to notice when it changes. */
-    inputSchemaFingerprint: text("input_schema_fingerprint").notNull(),
+    /** SHA-256 over the canonical JSON of the description and input schema, to notice when either changes. */
+    fingerprint: text("fingerprint").notNull(),
     approval: toolApproval("approval").notNull(),
+    /** For an approved tool: the version approved, kept to show the Workspace Admin what changed since. */
+    approvedFingerprint: text("approved_fingerprint"),
+    approvedDescription: text("approved_description"),
+    approvedInputSchema: jsonb("approved_input_schema"),
     discoveredAt: timestamptz("discovered_at").notNull(),
+    /** Set while the Upstream Server no longer offers the tool. The row is kept so a returning tool keeps its approval. */
+    missingSince: timestamptz("missing_since"),
   },
   (t) => [unique("upstream_tools_server_name_unique").on(t.serverId, t.name)],
 );

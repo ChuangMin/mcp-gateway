@@ -40,6 +40,9 @@ describe("the Gateway refuses to start with invalid configuration", () => {
     ["ENTRA_CLIENT_ID", "my-app", /ENTRA_CLIENT_ID.*GUID/],
     ["ENTRA_AUTHORITY_URL", "not a url", /ENTRA_AUTHORITY_URL.*URL/],
     ["GRAPH_BASE_URL", "not a url", /GRAPH_BASE_URL.*URL/],
+    ["TOOL_DISCOVERY_INTERVAL_SECONDS", "soon", /TOOL_DISCOVERY_INTERVAL_SECONDS.*whole number/],
+    ["TOOL_DISCOVERY_INTERVAL_SECONDS", "2.5", /TOOL_DISCOVERY_INTERVAL_SECONDS.*whole number/],
+    ["TOOL_DISCOVERY_INTERVAL_SECONDS", "5", /TOOL_DISCOVERY_INTERVAL_SECONDS.*at least 10/],
   ])("rejects %s=%s", async (name, value, message) => {
     const env = await envWith({ [name]: value });
 

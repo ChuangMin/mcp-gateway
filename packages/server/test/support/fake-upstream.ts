@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createServer, type IncomingHttpHeaders, type Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -16,15 +17,22 @@ export interface FakeUpstreamOptions {
   tools?: FakeTool[];
 }
 
+interface Session {
+  server: Server;
+  transport: StreamableHTTPServerTransport;
+}
+
 /**
- * An in-test Upstream Server: a real MCP server over Streamable HTTP (stateless), at `url`. Tests change `tools`
- * and `requireHeaders` to simulate changes on the server, and read `requests` to see what the Gateway sent.
+ * An in-test Upstream Server: a real MCP server over Streamable HTTP, at `url`. It keeps a session per client, so
+ * it can tell connected clients its tool list changed. Tests change `tools` and `requireHeaders` to simulate
+ * changes on the server, and read `requests` to see what the Gateway sent.
  */
 export class FakeUpstream {
   tools: FakeTool[];
   requireHeaders: Record<string, string>;
   /** Headers of every HTTP request received, in order. */
   readonly requests: IncomingHttpHeaders[] = [];
+  readonly #sessions = new Map<string, Session>();
   #http!: HttpServer;
   #url = "";
 
@@ -47,16 +55,7 @@ export class FakeUpstream {
         res.writeHead(404).end();
         return;
       }
-      const server = upstream.#mcpServer();
-      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-      res.on("close", () => {
-        void transport.close();
-        void server.close();
-      });
-      server
-        .connect(transport)
-        .then(() => transport.handleRequest(req, res))
-        .catch(() => res.headersSent || res.writeHead(500).end());
+      upstream.#handle(req, res).catch(() => res.headersSent || res.writeHead(500).end());
     });
     await new Promise<void>((resolve) => upstream.#http.listen(0, "127.0.0.1", resolve));
     upstream.#url = `http://127.0.0.1:${(upstream.#http.address() as AddressInfo).port}/mcp`;
@@ -68,15 +67,54 @@ export class FakeUpstream {
     return this.#url;
   }
 
+  /** How many clients currently hold a session. */
+  get sessionCount(): number {
+    return this.#sessions.size;
+  }
+
+  /** Sends `notifications/tools/list_changed` to every connected client. */
+  async notifyToolsChanged(): Promise<void> {
+    await Promise.all([...this.#sessions.values()].map((s) => s.server.sendToolListChanged()));
+  }
+
   /** Stops the server. Safe to call more than once. */
-  close(): Promise<void> {
-    if (!this.#http.listening) return Promise.resolve();
+  async close(): Promise<void> {
+    await Promise.all([...this.#sessions.values()].map((s) => s.server.close()));
+    this.#sessions.clear();
+    if (!this.#http.listening) return;
     this.#http.closeAllConnections();
-    return new Promise((resolve, reject) => this.#http.close((err) => (err ? reject(err) : resolve())));
+    await new Promise<void>((resolve, reject) => this.#http.close((err) => (err ? reject(err) : resolve())));
+  }
+
+  async #handle(req: Parameters<StreamableHTTPServerTransport["handleRequest"]>[0], res: Parameters<StreamableHTTPServerTransport["handleRequest"]>[1]) {
+    const sessionId = req.headers["mcp-session-id"];
+    const existing = typeof sessionId === "string" ? this.#sessions.get(sessionId) : undefined;
+    if (existing) {
+      await existing.transport.handleRequest(req, res);
+      return;
+    }
+    if (sessionId !== undefined) {
+      res.writeHead(404, { "content-type": "application/json" }).end(JSON.stringify({ error: "unknown session" }));
+      return;
+    }
+    const server = this.#mcpServer();
+    const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: randomUUID,
+      enableJsonResponse: true,
+      onsessioninitialized: (id) => void this.#sessions.set(id, { server, transport }),
+    });
+    transport.onclose = () => {
+      if (transport.sessionId) this.#sessions.delete(transport.sessionId);
+    };
+    await server.connect(transport);
+    await transport.handleRequest(req, res);
   }
 
   #mcpServer(): Server {
-    const server = new Server({ name: "fake-upstream", version: "1.0.0" }, { capabilities: { tools: {} } });
+    const server = new Server(
+      { name: "fake-upstream", version: "1.0.0" },
+      { capabilities: { tools: { listChanged: true } } },
+    );
     server.setRequestHandler(ListToolsRequestSchema, () => ({
       tools: this.tools.map((tool) => ({
         name: tool.name,

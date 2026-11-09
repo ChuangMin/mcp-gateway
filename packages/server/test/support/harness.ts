@@ -176,6 +176,7 @@ export async function bootGateway(options: BootOptions = {}): Promise<TestGatewa
       clock,
       port: 0,
       webDistDir: options.webDistDir,
+      discoveryTickMs: 20,
     });
   } catch (error) {
     await entra.close();
