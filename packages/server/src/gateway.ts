@@ -5,6 +5,8 @@ import { systemClock, type Clock } from "./clock.js";
 import { loadConfig } from "./config.js";
 import { openDatabase } from "./db/database.js";
 import { createApp } from "./http/app.js";
+import { createDirectory } from "./directory/directory.js";
+import { createEntraDirectory } from "./identity/entra-directory.js";
 import { createIdentity } from "./identity/identity.js";
 import { createWebSessions } from "./web-sessions.js";
 
@@ -41,6 +43,7 @@ export async function startGateway(options: StartOptions): Promise<RunningGatewa
     database,
     identity: createIdentity({ config, clock, database }),
     sessions: createWebSessions({ database, clock }),
+    directory: createDirectory({ database, clock, entra: createEntraDirectory({ config, clock }) }),
     webDistDir: options.webDistDir ?? defaultWebDistDir,
   });
   const hostname = options.hostname ?? "127.0.0.1";

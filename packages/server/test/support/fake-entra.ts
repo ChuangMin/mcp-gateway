@@ -40,6 +40,9 @@ export class FakeEntra {
   readonly #options: FakeEntraOptions;
   readonly #people = new Map<string, EntraPerson>();
   readonly #codes = new Map<string, IssuedCode>();
+  readonly #graphTokens = new Set<string>();
+  /** When true, Microsoft Graph answers every request with 503. */
+  graphDown = false;
   #server: ReturnType<typeof serve> | undefined;
   #url = "";
   #privateKey!: CryptoKey;
@@ -64,6 +67,11 @@ export class FakeEntra {
   /** The authority URL to configure the Gateway with (ENTRA_AUTHORITY_URL). */
   get url(): string {
     return this.#url;
+  }
+
+  /** The Microsoft Graph base URL to configure the Gateway with (GRAPH_BASE_URL). */
+  get graphUrl(): string {
+    return `${this.#url}/graph`;
   }
 
   /** Creates an account. Defaults to the configured tenant and no Platform Admin role. */
@@ -138,6 +146,12 @@ export class FakeEntra {
       if (field("client_id") !== options.clientId || field("client_secret") !== options.clientSecret) {
         return c.json({ error: "invalid_client" }, 401);
       }
+      if (field("grant_type") === "client_credentials") {
+        if (field("scope") !== `${this.graphUrl}/.default`) return c.json({ error: "invalid_scope" }, 400);
+        const accessToken = randomBytes(16).toString("base64url");
+        this.#graphTokens.add(accessToken);
+        return c.json({ token_type: "Bearer", access_token: accessToken, expires_in: 3600 });
+      }
       if (field("grant_type") !== "authorization_code") return c.json({ error: "unsupported_grant_type" }, 400);
       if (!issued) return invalidGrant("unknown or used code");
       if (field("redirect_uri") !== issued.redirectUri) return invalidGrant("redirect_uri mismatch");
@@ -166,6 +180,19 @@ export class FakeEntra {
         .sign(this.#privateKey);
 
       return c.json({ token_type: "Bearer", id_token: idToken, access_token: "fake", expires_in: 3600 });
+    });
+
+    // Microsoft Graph: only people in the configured tenant are in its directory.
+    app.get("/graph/v1.0/users/:idOrUpn", (c) => {
+      if (this.graphDown) return c.json({ error: { code: "ServiceUnavailable" } }, 503);
+      const bearer = c.req.header("authorization")?.replace(/^Bearer /, "") ?? "";
+      if (!this.#graphTokens.has(bearer)) return c.json({ error: { code: "InvalidAuthenticationToken" } }, 401);
+      const key = c.req.param("idOrUpn").toLowerCase();
+      const person = [...this.#people.values()].find(
+        (p) => p.tenantId === options.tenantId && (p.objectId === key || p.email.toLowerCase() === key),
+      );
+      if (!person) return c.json({ error: { code: "Request_ResourceNotFound" } }, 404);
+      return c.json({ id: person.objectId, displayName: person.name, mail: person.email, userPrincipalName: person.email });
     });
 
     return app;

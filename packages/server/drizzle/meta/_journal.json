@@ -8,6 +8,13 @@
       "when": 1794231684304,
       "tag": "0000_users_and_web_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794234293350,
+      "tag": "0001_workspaces_and_memberships",
+      "breakpoints": true
     }
   ]
 }

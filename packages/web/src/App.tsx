@@ -1,5 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { MeResponse, SignInError } from "@mcp-gateway/server/api";
+import { PlatformAdminPanel } from "./PlatformAdminPanel.tsx";
+import { STANDING_LABEL, WorkspacePage } from "./WorkspacePage.tsx";
+import { link, usePath } from "./router.ts";
+import { errorText, muted } from "./styles.ts";
 
 type SessionState = { status: "loading" } | { status: "signed-out" } | { status: "signed-in"; me: MeResponse };
 
@@ -22,8 +26,9 @@ function takeSignInError(): string | undefined {
 export function App() {
   const [session, setSession] = useState<SessionState>({ status: "loading" });
   const [signInError] = useState(takeSignInError);
+  const path = usePath();
 
-  useEffect(() => {
+  const loadMe = useCallback(() => {
     fetch("/api/me")
       .then(async (response) => {
         if (response.status === 401) return setSession({ status: "signed-out" });
@@ -32,21 +37,29 @@ export function App() {
       })
       .catch(() => setSession({ status: "signed-out" }));
   }, []);
+  // Reload on navigation too, so the Workspace list reflects changes made on a Workspace's page.
+  useEffect(loadMe, [loadMe, path]);
 
   const signOut = async () => {
     await fetch("/auth/sign-out", { method: "POST" });
     setSession({ status: "signed-out" });
   };
 
+  const workspaceId = /^\/workspaces\/([0-9a-f-]{36})$/i.exec(path)?.[1];
+
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", padding: "2rem", maxWidth: "40rem" }}>
-      <h1>mcp-gateway</h1>
+    <main style={{ fontFamily: "system-ui, sans-serif", padding: "2rem", maxWidth: "48rem" }}>
+      <h1>
+        <a {...link("/")} style={{ color: "inherit", textDecoration: "none" }}>
+          mcp-gateway
+        </a>
+      </h1>
       {session.status === "loading" && <p>Loading…</p>}
 
       {session.status === "signed-out" && (
         <>
           {signInError && (
-            <p role="alert" style={{ color: "#b00020" }}>
+            <p role="alert" style={errorText}>
               {signInError}
             </p>
           )}
@@ -65,18 +78,34 @@ export function App() {
               Sign out
             </button>
           </p>
-          <h2>Your Workspaces</h2>
-          {session.me.workspaces.length === 0 ? (
-            <p>You don't belong to any Workspace yet. Ask a Workspace Admin or a Platform Admin to add you.</p>
+          {workspaceId ? (
+            <WorkspacePage key={workspaceId} workspaceId={workspaceId} currentUserId={session.me.user.id} />
           ) : (
-            <ul>
-              {session.me.workspaces.map((workspace) => (
-                <li key={workspace.id}>{workspace.name}</li>
-              ))}
-            </ul>
+            <Home me={session.me} onChanged={loadMe} />
           )}
         </>
       )}
     </main>
+  );
+}
+
+function Home({ me, onChanged }: { me: MeResponse; onChanged: () => void }) {
+  return (
+    <>
+      <h2>Your Workspaces</h2>
+      {me.workspaces.length === 0 ? (
+        <p>You don't belong to any Workspace yet. Ask a Workspace Admin or a Platform Admin to add you.</p>
+      ) : (
+        <ul>
+          {me.workspaces.map((workspace) => (
+            <li key={workspace.id}>
+              <a {...link(`/workspaces/${workspace.id}`)}>{workspace.name}</a>{" "}
+              <span style={muted}>· {STANDING_LABEL[workspace.standing]}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {me.user.isPlatformAdmin && <PlatformAdminPanel onChanged={onChanged} />}
+    </>
   );
 }
